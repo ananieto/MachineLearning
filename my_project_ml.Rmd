@@ -1,0 +1,124 @@
+---
+title: "my_project_ml"
+author: "Ana Belen Nieto Librero"
+date: "7/1/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement (a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks). One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: [link]{http://groupware.les.inf.puc-rio.br/har} (see the section on the Weight Lifting Exercise Dataset).
+
+#Data
+
+The training data for this project are available here:
+
+[link]{https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv}
+
+The test data are available here:
+
+[link]{https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv}
+
+The data for this project come from this source: [link]{http://groupware.les.inf.puc-rio.br/har}. 
+
+
+Our outcome variable is classe, a factor variable with 5 levels. For this data set, ???participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in 5 different fashions:
+
+exactly according to the specification (Class A)
+
+throwing the elbows to the front (Class B)
+
+lifting the dumbbell only halfway (Class C)
+
+lowering the dumbbell only halfway (Class D)
+
+throwing the hips to the front (Class E)?
+
+Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes." 
+
+
+Prediction evaluations will be based on maximizing the accuracy and minimizing the out-of-sample error. All other available variables after cleaning will be used for prediction. 
+
+
+Two models will be tested using decision tree and random forest algorithms. The model with the highest accuracy will be chosen as our final model.
+
+
+#Goal
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+#Loading data
+
+```{r}
+mydata <- read.csv("pml-training.csv")
+head(mydata)
+summary(mydata)
+```
+
+#Create sets for use cross validation
+
+Select the 70% of the rows to train the model and the rest 30% to test the model.
+
+```{r}
+library(caret)
+set.seed(200)
+trainindex <- createDataPartition(y=mydata$classe,p=.70,list=F)
+train <- mydata[trainindex,]
+test <- mydata[-trainindex,]
+```
+
+#Clean the data
+```{r}
+excludeindex <- grep("name|timestamp|window|X", colnames(train), value=F) 
+trainclean <- train[,-excludeindex]
+trainclean[trainclean==""] <- NA
+trainfinal<-na.omit(trainclean)
+summary(trainclean)
+```
+
+
+#Principal Component Analysis
+To provide an overview in a reduced dimension of the training data we use the Principal Component Analysis with diferent number of components to be retained.
+
+```{r}
+prePCA <- preProcess(trainfinal[,1:52],method="pca",thresh=.8) 
+prePCA <- preProcess(trainfinal[,1:52],method="pca",thresh=.10) 
+prePCA <- preProcess(trainfinal[,1:52],method="pca",thresh=.95)
+prePCA <- preProcess(trainfinal[,1:52],method="pca",pcaComp=25) 
+#prePCA$rotation
+trainPCA <- predict(prePCA,trainfinal[,1:52])
+plot(trainPCA[,c("PC1","PC2")],col=trainfinal$classe)
+```
+
+#Decision tree
+The first model used was a decision tree.
+```{r}
+library(rpart)
+modelDT <- rpart(classe ~ ., data=trainfinal[,c(1:52,153)], method="class")
+predictionDT <- predict(modelDT, test[,c(1:52,153)], type = "class")
+rpart.plot(modelDT, main="Decision Tree", extra=102, under=TRUE, faclen=0)
+```
+
+
+#Random Forest
+
+The second model used was Random Forest.
+
+```{r}
+modelRF <- randomForest(classe ~. , data=trainfinal[,c(1:52,153)], method="class")
+predictionRF <- predict(modelRF, test[,c(1:52,153)], type = "class")
+confusionMatrix(predictionRF, test$classe)
+```
+
+#Decision
+The better model to predict the classe is Random Forest
+
+
+
+
