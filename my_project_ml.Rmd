@@ -28,7 +28,7 @@ The test data are available here:
 The data for this project come from this source: [link]{http://groupware.les.inf.puc-rio.br/har}. 
 
 
-Our outcome variable is classe, a factor variable with 5 levels. For this data set, ???participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in 5 different fashions:
+Our outcome variable is classe, a factor variable with 5 levels. For this data set, participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in 5 different fashions:
 
 exactly according to the specification (Class A)
 
@@ -53,12 +53,33 @@ Two models will be tested using decision tree and random forest algorithms. The 
 
 The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
 
-#Loading data
+#Loading data and the libraries
+
 
 ```{r}
-mydata <- read.csv("pml-training.csv")
-head(mydata)
-summary(mydata)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(e1071)
+library(randomForest)
+library(doMC)
+set.seed(111)
+# read the data
+traindata <- read.csv("pml-training.csv", na.strings = c("NA", "#DIV/0!", ""))
+testdata  <- read.csv("pml-testing.csv", na.strings = c("NA", "#DIV/0!", ""))
+
+# remove NA columns
+completes <- complete.cases(t(traindata)) & complete.cases(t(testdata))
+mytraindata <- traindata[,completes]
+mytestdata  <- testdata[,completes]
+
+# remove columns with data that isn't useful
+mytraindata <- mytraindata[,-c(1,3,4,5,6,7)]
+mytestdata <- mytestdata[,-c(1,3,4,5,6,7)]
+dim(mytraindata)
+colnames(mytraindata)
 ```
 
 #Create sets for use cross validation
@@ -66,20 +87,9 @@ summary(mydata)
 Select the 70% of the rows to train the model and the rest 30% to test the model.
 
 ```{r}
-library(caret)
-set.seed(200)
-trainindex <- createDataPartition(y=mydata$classe,p=.70,list=F)
-train <- mydata[trainindex,]
-test <- mydata[-trainindex,]
-```
-
-#Clean the data
-```{r}
-excludeindex <- grep("name|timestamp|window|X", colnames(train), value=F) 
-trainclean <- train[,-excludeindex]
-trainclean[trainclean==""] <- NA
-trainfinal<-na.omit(trainclean)
-summary(trainclean)
+trainindex <- createDataPartition(y=mytraindata$classe,p=.70,list=F)
+train <- mytraindata[trainindex,]
+validation <- mytraindata[-trainindex,]
 ```
 
 
@@ -87,37 +97,63 @@ summary(trainclean)
 To provide an overview in a reduced dimension of the training data we use the Principal Component Analysis with diferent number of components to be retained.
 
 ```{r}
-prePCA <- preProcess(trainfinal[,1:52],method="pca",thresh=.8) 
-prePCA <- preProcess(trainfinal[,1:52],method="pca",thresh=.10) 
-prePCA <- preProcess(trainfinal[,1:52],method="pca",thresh=.95)
-prePCA <- preProcess(trainfinal[,1:52],method="pca",pcaComp=25) 
+prePCA <- preProcess(train[,-c(1,54)],method="pca",thresh=.8) 
+prePCA <- preProcess(train[,-c(1,54)],method="pca",thresh=.10) 
+prePCA <- preProcess(train[,-c(1,54)],method="pca",thresh=.95)
+prePCA <- preProcess(train[,-c(1,54)],method="pca",pcaComp=25) 
 #prePCA$rotation
-trainPCA <- predict(prePCA,trainfinal[,1:52])
-plot(trainPCA[,c("PC1","PC2")],col=trainfinal$classe)
+trainPCA <- predict(prePCA,train[,-c(1,54)])
+plot(trainPCA[,c("PC1","PC2")],col=train$classe)
 ```
-
-#Decision tree
-The first model used was a decision tree.
-```{r}
-library(rpart)
-modelDT <- rpart(classe ~ ., data=trainfinal[,c(1:52,153)], method="class")
-predictionDT <- predict(modelDT, test[,c(1:52,153)], type = "class")
-rpart.plot(modelDT, main="Decision Tree", extra=102, under=TRUE, faclen=0)
-```
-
 
 #Random Forest
 
-The second model used was Random Forest.
+The first model used was Random Forest.
 
 ```{r}
-modelRF <- randomForest(classe ~. , data=trainfinal[,c(1:52,153)], method="class")
-predictionRF <- predict(modelRF, test[,c(1:52,153)], type = "class")
-confusionMatrix(predictionRF, test$classe)
+control.params <- trainControl(method="cv", 5)
+rf.model <- train(classe ~ ., data=train, method="rf",
+                 trControl=control.params, ntree=251)
+rf.model
 ```
 
+#Performance
+```{r}
+rf.predict <- predict(rf.model, train)
+confusionMatrix(train$classe, rf.predict)[3]
+
+```
+#Validation
+```{r}
+rf.predict.val <- predict(rf.model, validation)
+confusionMatrix(validation$classe, rf.predict.val)[3]
+
+```
+
+The accuracy in this case is 0.9934.
+The out of sample error is (1-accuracy= 1-0.9933) 0.663%.
+
+#Decision tree
+The second model used was a decision tree.
+
+```{r}
+modelDT <- rpart(classe ~ ., data=train, method="class")
+predictionDT <- predict(modelDT, validation, type = "class")
+confusionMatrix(validation$classe, predictionDT)[3]
+fancyRpartPlot(modelDT)
+```
+
+The accuracy of the this model is lower than the accuracy of Random Forest.
 #Decision
-The better model to predict the classe is Random Forest
+The best model to predict the classe is Random Forest.
+
+##Quiz anwers
+
+```{r}
+rf.predict.test <- predict(rf.model, mytestdata)
+rf.predict.test
+```
+
 
 
 
